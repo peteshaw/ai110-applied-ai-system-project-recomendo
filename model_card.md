@@ -1,4 +1,4 @@
-# Model Card — VibeFinder 1.0
+# Model Card — VibeFinder 2.0
 
 *Last updated: 20261106. This card documents a classroom project.
 
@@ -708,3 +708,94 @@ like — and tune the weights against those simulated skips, so the weights stop
 and start being evidence. Finally I would build the diversity mechanism properly: a hard cap per
 genre with a long-tail quota, plus a test that asserts it actually changes the output. A fairness
 feature that never fires is not a fairness feature.
+
+---
+
+# Part 2 — the explanation layer (version 2.0)
+
+## 10. What the new layer does
+
+VibeFinder 1.0 explained every score by hand, in templates. Version 2.0 lets a language model
+write the explanation, then **audits it before the user sees it**. The recommender is unchanged:
+same scoring, same ranking, same diversity pass. Only the prose is new, and the prose is the part
+that can lie.
+
+The audit is deterministic. The verifier extracts checkable claims from the sentence — numbers,
+quoted names, proper nouns — and compares them against the song's actual row: energy 0.35, tempo
+72 BPM, decade 2020s, score 5.00. Claim support is supported ÷ total. An answer is accepted at
+**0.80** with no invented names; otherwise the system retries once with a stricter prompt, and if
+that also fails it returns the explanation **with a caveat** instead of hiding the problem.
+
+Two refusals exist before any generation happens:
+
+1. **Nothing recognised** — the request names nothing the catalog can filter on ("polka death
+   metal"). The system declines rather than dressing up the default ranking as a match.
+2. **Partial match** — "1940s jazz ballads" matches jazz but not the decade. The answer is given
+   with an explicit caveat: *the catalog has no songs from the 1940s.*
+
+## 11. Failure cases and guardrails (2.0)
+
+**Failure case 1 — an invented release year.**
+An explanation wrote "released in 2019" for a song whose row says `2020s`. A reader would never
+check. The verifier catches it because any year-like number must match `release_decade`
+exactly (or fall inside it). Fix: numbers are claims, not decoration.
+
+**Failure case 2 — a song that does not exist.**
+The model wrote that the track "pairs well with *Midnight Velvet*". There is no such song in the
+catalog. The verifier checks every quoted name against the 30 titles and 29 artists; unknown
+names fail the answer outright, regardless of how good the rest of the sentence is. This is the
+most dangerous class of error: it is fluent, plausible, and fabricates catalog content.
+
+**Failure case 3 — an explanation with no checkable claims.**
+"This one feels right for a rainy afternoon" contains no numbers and no names. It passes a human
+read. The verifier scores it 0.00 and rejects it — an explanation that cannot be checked is
+treated as unverified, not as safe.
+
+**Guardrail thresholds.** 0.06 absolute tolerance on 0–1 features, ±2 on tempo and popularity,
+exact (or same-decade) on years. These are policy choices, visible at the top of `src/verify.py`;
+tightening them lowers false accepts and raises false rejects.
+
+## 12. Limitations and misuse (2.0)
+
+- **Grounding is not correctness.** A sentence can cite real numbers and still be a bad reason to
+  like a song. The verifier proves the facts, not the taste.
+- **The lexicon is the ceiling.** "Something for a rainy Sunday" works; "music for the drive home
+  after a fight" does not, because no keyword matches. Unknown words are reported, not guessed.
+- **The verifier is a rule, so it can be gamed.** A model that writes only true statements and no
+  opinions passes trivially. The harness measures compliance, not quality.
+- **Prompt injection is possible in principle.** The request is echoed into the prompt. The
+  facts-only instruction and the post-hoc verifier bound the damage to invented content, which
+  would be caught — but a hostile request could still steer which true facts get emphasised.
+- **One retry only.** A model that fails twice yields a caveated answer. That is a deliberate
+  budget: unbounded retries turn a slow answer into a hung one.
+- **Not for real recommendation.** 30 songs, one listener profile per run, no collaborative
+  signal, no listening history. Treat it as a testbed for grounded generation, not a product.
+
+## 13. AI collaboration — one suggestion accepted, one revised
+
+**Accepted: verify before retrying.** The first design asked the model to check its own answer
+("are these claims supported?"). A second model grading the first just moves the failure. The
+better suggestion was to make the check mechanical: extract claims, compare to the row. That is
+now `src/verify.py`, and it is the only reason the harness can report a number instead of an
+impression.
+
+**Revised: a single strict retry.** The suggestion was to retry up to five times with escalating
+prompts. I cut it to one. Each retry costs a model call and latency, and a model that failed the
+first audit usually fails the second for the same reason; the honest output after one retry is a
+caveat, not a fourth attempt. The attempt count is a parameter, so the decision is reversible.
+
+**What the collaboration looked like.** I wrote the fact-sheet format, the claim rules and the
+thresholds; the model helped draft the lexicon and the harness structure. Every generated
+suggestion was run against the 45 tests before it stayed.
+
+## 14. Reliability testing — what surprised me
+
+- **The bug was vocabulary, not intelligence.** "Studying" did not match the keyword "study",
+  so a perfectly ordinary request lost its energy target. Ten of sixteen harness queries failed
+  in explain-only mode for reasons that had nothing to do with the model.
+- **Half of my "unanswerable" test cases were answerable.** "1940s jazz ballads" failed on the
+  decade but the catalog does have jazz. Labelling it impossible was my error, not the system's;
+  the fix was a caveat and a corrected test set, not a stricter refusal.
+- **Fabrication concentrates in the fluent parts.** The invented song title sat in the most
+  natural-sounding sentence of the paragraph. Rules that check names matter more than rules that
+  check numbers, because numbers look suspicious and names do not.

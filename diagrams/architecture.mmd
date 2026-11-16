@@ -1,0 +1,30 @@
+---
+title: VibeFinder 2.0 — grounded recommendations
+---
+
+flowchart TD
+    Q([Listener request<br/>free text]) --> NLU[Intent parser<br/>lexicon, no model<br/>genre · mood · energy · decade]
+    NLU -->|nothing recognised| REFUSE[Decline:<br/>catalog can not filter on those terms]
+    NLU --> RANK[Recommender<br/>unchanged from 1.0<br/>weighted scoring + diversity]
+    RANK --> FACT[Fact sheet<br/>one song's real values<br/>and score]
+    FACT --> EXPL[Explainer<br/>stub or Gemini<br/>facts only]
+
+    EXPL --> VER{Verifier<br/>numbers and names<br/>match the fact sheet?}
+
+    VER -- "claim support ≥ 0.80<br/>and no invented names" --> OK([Answer returned<br/>+ audit report])
+    VER -- "below threshold" --> RETRY{Attempts left?}
+    RETRY -- "yes: strict prompt" --> EXPL
+    RETRY -- "no" --> CAVEAT[Return with caveat:<br/>state that it is unverified]
+
+    OK --> TRACE[(JSONL trace)]
+    CAVEAT --> TRACE
+    REFUSE --> TRACE
+    EVAL[[harness.py<br/>16 queries × 2 modes<br/>pass / fail]] -.->|drives| Q
+    EVAL -.->|reads| TRACE
+
+    classDef guard fill:#fff4e6,stroke:#d9822b,stroke-width:2px
+    classDef core fill:#e8f0fe,stroke:#4285f4,stroke-width:2px
+    classDef out fill:#e6f4ea,stroke:#34a853,stroke-width:2px
+    class NLU,VER,RETRY guard
+    class RANK,FACT,EXPL core
+    class OK,REFUSE,CAVEAT out
