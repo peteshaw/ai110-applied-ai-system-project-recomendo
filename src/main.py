@@ -82,6 +82,41 @@ def resolve_mode(mode_name, experiment):
     override = EXPERIMENTS[experiment]
     return override, f"{mode_name} + {experiment} {override}"
 
+def print_agent_result(result):
+    """Human-readable report for one agentic run: match, explanation, audit."""
+    width = 78
+    print("=" * width)
+    print(f"REQUEST: {result.get('request') or '(profile only)'}")
+    matched = ", ".join(result["nlu"]["matched"]) or "nothing recognised"
+    print(f"UNDERSTOOD AS: {matched}")
+    if result["nlu"].get("ignored"):
+        print(f"IGNORED: {', '.join(result['nlu']['ignored'][:8])}")
+    print("=" * width)
+
+    if result["status"] == "no_match":
+        print("STATUS: declined — none of those terms map to catalog features.")
+        print(f"  {result.get('message', '')}")
+        return
+
+    rec = result["recommendation"]
+    print(f"TOP MATCH: {rec['title']} — {rec['artist']} "
+          f"({rec['genre']}/{rec['mood']}) score {rec['score']:.2f}")
+    if result["alternatives"]:
+        others = "; ".join(f"{a['title']} ({a['score']:.2f})" for a in result["alternatives"])
+        print(f"ALSO CONSIDERED: {others}")
+    print(f"\nEXPLANATION:\n  {result['explanation']}")
+
+    ground = result["grounding"]
+    verdict = "GROUNDED" if ground["grounded"] else "NOT GROUNDED"
+    print(f"\nVERIFIER: {verdict}  (claim support {ground['ratio']:.2f})")
+    for problem in ground["problems"][:5]:
+        print(f"  - {problem}")
+    print(f"ATTEMPTS: {len(result['attempts'])}"
+          + ("  (one retry with a stricter prompt)" if len(result["attempts"]) > 1 else ""))
+    for caveat in result.get("caveats", []):
+        print(f"CAVEAT: {caveat}")
+
+
 def build_parser(profiles):
     """Define the CLI surface and return the configured argparse parser.
 
@@ -99,6 +134,13 @@ def build_parser(profiles):
     parser.add_argument("--experiment", choices=sorted(EXPERIMENTS), default=None,
                         help="apply a sensitivity experiment on top of --mode")
     parser.add_argument("--list-profiles", action="store_true", help="print available profiles and exit")
+    parser.add_argument("--request", default=None,
+                        help="free-text listener request; runs the agentic explanation layer")
+    parser.add_argument("--provider", default="stub",
+                        choices=["stub", "stub-sloppy", "gemini"],
+                        help="who writes the explanation (gemini needs GEMINI_API_KEY)")
+    parser.add_argument("--trace", default=None,
+                        help="append a JSONL trace line to this file")
     return parser
 
 def main(argv=None):
@@ -112,6 +154,22 @@ def main(argv=None):
         return 0
 
     songs = load_songs()
+    if args.request:
+        try:
+            from .agent import run as run_agent
+            from .llm import get_provider
+        except ImportError:  # pragma: no cover
+            from agent import run as run_agent  # type: ignore
+            from llm import get_provider  # type: ignore
+
+        provider = get_provider(args.provider)
+        profile = args.profile if args.profile != DEFAULT_PROFILE else None
+        result = run_agent(args.request, songs, profiles, profile_name=profile,
+                           mode=args.mode, k=args.k, provider=provider,
+                           trace_path=args.trace)
+        print_agent_result(result)
+        return 0 if result["status"] == "answered" else 2
+
     print(f"Loaded songs: {len(songs)}")
     print(f"Catalog spans {len({s['genre'] for s in songs})} genres and "
           f"{len({s['mood'] for s in songs})} moods.\n")
