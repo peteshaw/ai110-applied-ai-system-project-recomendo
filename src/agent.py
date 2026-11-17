@@ -12,6 +12,7 @@ from .facts import catalog_vocabulary, fact_sheet
 from .llm import get_provider
 from .nlu import parse_request
 from .recommender import recommend_songs
+from .retrieval import load_notes, render_notes, retrieve_notes
 from .verify import verify_explanation
 
 DEFAULT_THRESHOLD = 0.8
@@ -47,6 +48,9 @@ def run(request, songs, profiles, profile_name=None, mode="balanced", k=3,
     if not guardrails:
         max_attempts, threshold = 1, 0.0
 
+    notes = retrieve_notes(request, load_notes())
+    note_text = render_notes(notes)
+
     ranked = recommend_songs(prefs, songs, k=k, mode=mode)
     if not ranked:
         return {"status": "no_results", "request": request, "attempts": [],
@@ -59,7 +63,7 @@ def run(request, songs, profiles, profile_name=None, mode="balanced", k=3,
     attempts = []
     verdict = None
     for attempt in range(1, max_attempts + 1):
-        text = provider.explain(request, facts, strict=attempt > 1)
+        text = provider.explain(request, facts, strict=attempt > 1, notes=note_text)
         verdict = verify_explanation(text, facts, vocab, threshold=threshold)
         attempts.append({
             "attempt": attempt,
@@ -80,6 +84,8 @@ def run(request, songs, profiles, profile_name=None, mode="balanced", k=3,
         "profile": profile_name,
         "mode": mode,
         "nlu": nlu_report,
+        "retrieved_notes": [{"key": key, "title": note["title"], "note": note["note"]}
+                            for key, note in notes],
         "recommendation": {
             "title": facts["title"],
             "artist": facts["artist"],
@@ -110,7 +116,16 @@ def run(request, songs, profiles, profile_name=None, mode="balanced", k=3,
         with open(trace_path, "a", encoding="utf-8") as handle:
             handle.write(json.dumps({
                 "ts": _now(), "request": request, "profile": profile_name,
-                "status": status, "attempts": [
+                "status": status,
+                "steps": [
+                    {"step": "parse", "matched": nlu_report.get("matched", []),
+                     "ignored": nlu_report.get("ignored", [])},
+                    {"step": "retrieve", "notes": [key for key, _ in notes]},
+                    {"step": "rank", "title": facts["title"], "score": facts["score"]},
+                    {"step": "verify", "attempts": len(attempts),
+                     "grounded": bool(verdict and verdict["grounded"])},
+                ],
+                "attempts": [
                     {k: a[k] for k in ("attempt", "provider", "strict", "grounded",
                                        "ratio", "problems")} for a in attempts],
                 "recommendation": result["recommendation"],

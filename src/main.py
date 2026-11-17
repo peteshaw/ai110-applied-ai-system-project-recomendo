@@ -91,6 +91,9 @@ def print_agent_result(result):
     print(f"UNDERSTOOD AS: {matched}")
     if result["nlu"].get("ignored"):
         print(f"IGNORED: {', '.join(result['nlu']['ignored'][:8])}")
+    if result.get("retrieved_notes"):
+        keys = ", ".join(note["key"] for note in result["retrieved_notes"])
+        print(f"RETRIEVED NOTES: {keys}")
     print("=" * width)
 
     if result["status"] == "no_match":

@@ -442,3 +442,38 @@ looked correct in a diff. The only thing that caught them was executing the code
 property. AI was at its best when asked for **options, critiques and mechanisms** — three
 formulas, a review of a profile, a diagnosis of a ranking — and at its weakest when asked to
 just write the answer.
+
+## Agentic workflow traces (2.0 enhancement)
+
+The committed log `assets/agentic_trace.jsonl` is the machine-readable record of the agent's
+intermediate work. It is linked here rather than pasted in full because the harness appends a
+new line for every run. Each line contains:
+
+- `steps`: `parse` (matched and ignored words), `retrieve` (context-note keys), `rank`
+  (recommended title and score), and `verify` (attempt count and final verdict).
+- `attempts`: every explanation attempt, including the rejected first attempt from
+  `stub-sloppy`, with its grounding ratio and the exact problems found by the verifier.
+- `recommendation`: the song that survived the workflow.
+
+Example trace excerpt for "something chill lofi for studying":
+
+```json
+{
+  "status": "answered",
+  "steps": [
+    {"step": "parse", "matched": ["favorite_mood:chill", "energy:chill"], "ignored": []},
+    {"step": "retrieve", "notes": ["study_sessions", "rainy_afternoons"]},
+    {"step": "rank", "title": "Library Rain", "score": 3.0},
+    {"step": "verify", "attempts": 2, "grounded": true}
+  ],
+  "attempts": [
+    {"attempt": 1, "strict": false, "grounded": false, "ratio": 0.5,
+     "problems": ["number 2019 not supported as decade",
+                  "quoted name not in catalog: Midnight Velvet"]},
+    {"attempt": 2, "strict": true, "grounded": true, "ratio": 1.0, "problems": []}
+  ]
+}
+```
+
+This is the evidence for the agentic workflow enhancement: the system does not just print a
+final answer, it records the decision chain and the failed intermediate attempt.

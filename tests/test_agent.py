@@ -15,6 +15,7 @@ from src.facts import catalog_vocabulary, fact_sheet
 from src.llm import StubProvider
 from src.nlu import parse_request
 from src.recommender import load_profiles, load_songs
+from src.retrieval import load_notes, retrieve_notes
 from src.verify import verify_explanation
 
 SONGS = load_songs()
@@ -118,6 +119,16 @@ class TestAgentLoop(unittest.TestCase):
                      provider=StubProvider("careful"))
         self.assertIsInstance(result["facts"]["mood_tags"], list)
         self.assertTrue(all(isinstance(t, str) for t in result["facts"]["mood_tags"]))
+
+    def test_context_notes_are_retrieved_and_reported(self):
+        result = run("something chill for studying", SONGS, PROFILES,
+                     provider=StubProvider("careful"))
+        keys = [note["key"] for note in result["retrieved_notes"]]
+        self.assertIn("study_sessions", keys)
+
+    def test_retrieval_ignores_unrelated_requests(self):
+        notes = load_notes()
+        self.assertEqual(retrieve_notes("polka death metal", notes), [])
 
 
 if __name__ == "__main__":

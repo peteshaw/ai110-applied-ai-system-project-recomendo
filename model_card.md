@@ -1,13 +1,13 @@
 # Model Card — VibeFinder 2.0
 
-*Last updated: 20261106. This card documents a classroom project.
+*Last updated: 20261116. This card documents a classroom project.
 
 ---
 
 ## Model Name
 
-**VibeFinder 1.0** — a weighted-score, content-based music recommender that runs in the
-terminal.
+**VibeFinder 2.0** — a weighted-score, content-based music recommender with a verified
+agentic explanation layer, running in the terminal.
 
 ## Goal / Task
 
@@ -768,7 +768,7 @@ tightening them lowers false accepts and raises false rejects.
   would be caught — but a hostile request could still steer which true facts get emphasised.
 - **One retry only.** A model that fails twice yields a caveated answer. That is a deliberate
   budget: unbounded retries turn a slow answer into a hung one.
-- **Not for real recommendation.** 30 songs, one listener profile per run, no collaborative
+- **Not for real recommendation.** 31 songs, one listener profile per run, no collaborative
   signal, no listening history. Treat it as a testbed for grounded generation, not a product.
 
 ## 13. AI collaboration — one suggestion accepted, one revised
@@ -786,7 +786,7 @@ caveat, not a fourth attempt. The attempt count is a parameter, so the decision 
 
 **What the collaboration looked like.** I wrote the fact-sheet format, the claim rules and the
 thresholds; the model helped draft the lexicon and the harness structure. Every generated
-suggestion was run against the 45 tests before it stayed.
+suggestion was run against the 47 tests before it stayed.
 
 ## 14. Reliability testing — what surprised me
 
@@ -799,3 +799,46 @@ suggestion was run against the 45 tests before it stayed.
 - **Fabrication concentrates in the fluent parts.** The invented song title sat in the most
   natural-sounding sentence of the paragraph. Rules that check names matter more than rules that
   check numbers, because numbers look suspicious and names do not.
+
+## 15. Specialization behavior — baseline vs constrained writer
+
+`scripts/compare_prompt_styles.py` runs ten fixed requests through two writers with one
+attempt each. The baseline writer is fluent but unconstrained; the specialized writer uses
+the fact-only, no-invention prompt pattern from `src/llm.py`. The verifier scores every
+claim, so the comparison is measurable rather than a matter of taste.
+
+| Writer | Mean claim support | Fabricated claims | Grounded answers |
+|---|---:|---:|---:|
+| Baseline, unconstrained | 0.490 | 29 | 0/10 |
+| Specialized, fact-only | 1.000 | 0 | 10/10 |
+
+Example for "upbeat pop for the gym":
+
+```text
+BASELINE:
+  "Gym Hero" by Max Pulse is an intense pop classic released in 2019 with energy 0.93.
+  It pairs well with "Midnight Velvet".
+  VERIFIER: NOT GROUNDED — invented year and invented song title.
+
+SPECIALIZED:
+  "Gym Hero" by Max Pulse is an intense pop track from the 2020s with energy 0.93 and
+  tempo 132 BPM. It scores 3.94 against this profile, driven by euphoric, confident.
+  VERIFIER: GROUNDED — claim support 1.00.
+```
+
+The specialized writer is deliberately less conversational. That is the trade-off: the
+system gives up flourish in exchange for claims that can each be traced to a catalog row.
+
+## 16. Custom retrieval and agentic traces
+
+The RAG enhancement adds `data/context_notes.json`, a small custom source describing listening
+contexts (study, gym, rainy afternoons, road trips, wind-down). `src/retrieval.py` retrieves
+matching notes from the request and passes them into the explanation prompt as framing only;
+numeric and entity claims still have to come from the song fact sheet. For example,
+"something chill lofi for studying" retrieves `study_sessions` and `rainy_afternoons`, and the
+CLI prints those keys before the recommendation.
+
+The agentic workflow enhancement is recorded in `assets/agentic_trace.jsonl`. Each line
+contains the `parse → retrieve → rank → verify` steps, the retrieved note keys, every
+explanation attempt with its grounding ratio and problems, and the final recommendation.
+`ai_interactions.md` links to this committed log and explains how to read it.

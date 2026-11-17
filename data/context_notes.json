@@ -1,0 +1,27 @@
+{
+  "study_sessions": {
+    "title": "study sessions",
+    "tags": ["study", "studying", "focus", "focused", "reading", "lofi", "chill", "calm"],
+    "note": "Low-energy, calm or focused tracks with gentle textures suit study sessions; avoid sudden tempo changes."
+  },
+  "gym_sessions": {
+    "title": "gym sessions",
+    "tags": ["gym", "workout", "run", "energetic", "upbeat", "hype", "dance", "party"],
+    "note": "High-energy tracks with driving tempo and confident or euphoric moods suit workouts."
+  },
+  "rainy_afternoons": {
+    "title": "rainy afternoons",
+    "tags": ["rainy", "rain", "reading", "chill", "lofi", "calm", "quiet"],
+    "note": "Soft acoustic textures and relaxed moods fit rainy afternoons and quiet reading."
+  },
+  "road_trips": {
+    "title": "road trips",
+    "tags": ["road", "trip", "drive", "driving", "rock", "synthwave"],
+    "note": "Steady mid-to-fast tempos and anthemic genres such as rock or synthwave fit long drives."
+  },
+  "late_night_wind_down": {
+    "title": "late-night wind-down",
+    "tags": ["sleep", "quiet", "calm", "ambient", "soft", "relax"],
+    "note": "Very low energy and calm or peaceful moods fit late-night wind-down listening."
+  }
+}

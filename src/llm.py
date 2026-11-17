@@ -18,14 +18,15 @@ SYSTEM_RULE = (
 )
 
 
-def build_prompt(request, facts, strict=False):
+def build_prompt(request, facts, strict=False, notes=""):
     from .facts import render_fact_block
 
     request_line = request.strip() or "the listener's saved profile"
     extra = ("\nEvery number you write must appear above, exactly. Do not round. "
              "Do not name any song or artist that is not in the fact block.\n") if strict else ""
-    return (f"{SYSTEM_RULE}\n\nListener request: {request_line}\n\n"
-            f"Recommendation to explain:\n{render_fact_block(facts)}{extra}"
+    note_block = f"\nRetrieved context notes (use only for framing, never as facts):\n{notes}\n" if notes else ""
+    return (f"{SYSTEM_RULE}\n\nListener request: {request_line}\n"
+            f"{note_block}\nRecommendation to explain:\n{render_fact_block(facts)}{extra}"
             f"\nExplanation:")
 
 
@@ -43,7 +44,7 @@ class StubProvider(Provider):
         self.behaviour = behaviour
         self.name = f"stub-{behaviour}"
 
-    def explain(self, request, facts, strict=False):
+    def explain(self, request, facts, strict=False, notes=""):
         if self.behaviour == "sloppy" and not strict:
             return (
                 f"\"{facts['title']}\" by {facts['artist']} is a {facts['mood']} "
@@ -82,8 +83,8 @@ class GeminiProvider(Provider):
         from google import genai
         self._client = genai.Client(api_key=key)
 
-    def explain(self, request, facts, strict=False):
-        prompt = build_prompt(request, facts, strict=strict)
+    def explain(self, request, facts, strict=False, notes=""):
+        prompt = build_prompt(request, facts, strict=strict, notes=notes)
         response = self._client.models.generate_content(
             model=self.model, contents=prompt)
         return (getattr(response, "text", "") or "").strip()
